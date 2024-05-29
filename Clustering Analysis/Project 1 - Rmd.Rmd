@@ -1,0 +1,255 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Project 1 (EAS 509: Fall'23)
+
+### [Project Title]{.underline}: Clustering Analysis of the Land Mines Data set
+
+### [Team Members]{.underline}:
+
+1.  Sujay Shrivastava (50496221) (sujayshr)
+2.  Utkarsh Mathur (50495131) (umathur)
+3.  Venkata Lakshmi Krishna Tejaswi Gudimetla (50496378) (vgudimet)
+
+### [Project Dataset]{.underline}: [Land Mines](#0)
+
+------------------------------------------------------------------------
+
+## Importing Libraries
+
+```{r}
+# Visualization and Analysis
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggdendro)
+library(readxl)
+library(plotly)
+suppressWarnings({
+  library(readxl)
+})
+
+# Modeling and Inference
+library(randomForest)
+library(caret)
+library(nnet)
+library(glmnet)
+library(MASS)
+library(e1071)
+library(pROC)
+```
+
+------------------------------------------------------------------------
+
+```{r}
+df <- read_excel("mine_data.xlsx")
+summary(df)
+```
+
+```{r}
+df %>%
+  ggplot(aes(y = M, x = V)) +
+  geom_point(color = "blue") +
+  theme_bw()
+
+df %>%
+  ggplot(aes(y = M, x = H)) +
+  geom_point(color = "red") +
+  theme_bw()
+
+df %>%
+  ggplot(aes(y = M, x = S)) +
+  geom_point(color = "blue") +
+  theme_bw()
+```
+
+## K-Means Clustering
+
+```{r}
+features <- df[, c("V", "H", "S")]
+labels <- df[,c("M")]
+```
+
+```{r}
+kmeans_model <- kmeans(features, 5, nstart=20)
+df$clusters <- kmeans_model$cluster
+```
+
+```{r}
+confusion_matrix <- table(df$clusters, df$M)
+print(confusion_matrix)
+```
+
+```{r}
+plot_ly(x=df$V, y=df$H, z=df$S, color=df$M, type="scatter3d")
+```
+
+```{r}
+plot_ly(x=df$V, y=df$H, z=df$S, color=df$clusters, type="scatter3d")
+```
+
+### Analysis of Number of Clusters
+
+```{r}
+k_values <- 1:8  # Adjust the range as needed
+wss_values <- vector("numeric", length(k_values))
+
+for (k in k_values) {
+  kmeans_model <- kmeans(df[,1:3], k)
+  wss <- sum(kmeans_model$withinss)
+  wss_values[k] <- wss
+}
+```
+
+```{r}
+elbow_plot <- ggplot(data.frame(k = k_values, wss = wss_values), aes(x = k, y = wss)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Elbow Plot for K-means Clustering",
+       x = "Number of Clusters (k)",
+       y = "Within-Cluster Sum of Squares (WCSS)")
+ggplotly(elbow_plot)
+```
+
+```{r}
+new_kmeans_model <- kmeans(features, 4, nstart=20)
+df$clusters2 <- new_kmeans_model$cluster
+plot_ly(x=df$V, y=df$H, z=df$S, color=df$clusters2, type="scatter3d")
+```
+
+------------------------------------------------------------------------
+
+## Hierarchical Clustering
+
+```{r}
+h_clust.complete <- hclust(dist(features), method = "complete")
+h_clust.single <- hclust(dist(features), method = "single")
+h_clust.average <- hclust(dist(features), method = "average")
+```
+
+```{r}
+ggplotly(ggdendrogram(h_clust.complete, rotate = FALSE, size = 2))
+```
+
+```{r}
+ggplotly(ggdendrogram(h_clust.single, rotate = FALSE, size = 2))
+```
+
+```{r}
+ggplotly(ggdendrogram(h_clust.average, rotate = FALSE, size = 2))
+```
+
+------------------------------------------------------------------------
+
+## Classification Performances
+
+```{r}
+set.seed(42)
+sample1 <- sample(c(TRUE, FALSE), nrow(df), replace=TRUE, prob=c(0.8,0.2))
+train1 <- df[sample1,]
+test1 <- df[!sample1,]
+
+train1$M <- factor(train1$M)
+test1$M <- factor(test1$M)
+```
+
+### Logistic Regression
+
+```{r}
+# Fitting a logistic regression model
+lr_model <- multinom(M ~ V + H + S, data=train1)
+
+# Print the summary of the model
+print(summary(lr_model))
+
+# Predict on the test set
+lr_pred <- predict(lr_model, test1)
+
+# Model Diagnostics
+confusion_matrix_1 <- table(test1$M, lr_pred)
+
+accuracy <- mean(diag(confusion_matrix_1))
+precision <- precision(confusion_matrix_1)
+recall <- recall(confusion_matrix_1)
+
+print(accuracy)
+print(precision)
+print(recall)
+print(confusion_matrix_1)
+```
+
+```{r}
+plot_ly(
+    x = c(1,2,3,4,5), y = c(1,2,3,4,5),
+    z = confusion_matrix_1, type = "heatmap", colorscale = 'Greys'
+)
+```
+
+### Linear Support Vector Machine
+
+```{r}
+# Fitting a SVM model
+svm_model <- svm(M ~ V + H + S, data=train1, kernel="linear")
+
+# Print the summary of the model
+print(summary(svm_model))
+
+# Predict on the test set
+svm_pred <- predict(svm_model, test1)
+
+# Model Diagnostics
+confusion_matrix_2 <- table(test1$M, svm_pred)
+
+accuracy <- mean(diag(confusion_matrix_2))
+precision <- precision(confusion_matrix_2)
+recall <- recall(confusion_matrix_2)
+
+print(accuracy)
+print(precision)
+print(recall)
+print(confusion_matrix_2)
+```
+
+```{r}
+plot_ly(
+    x = c(1,2,3,4,5), y = c(1,2,3,4,5),
+    z = confusion_matrix_2, type = "heatmap", colorscale = 'Greys'
+)
+```
+
+### Radial Support Vector Machine
+
+```{r}
+# Fitting a SVM model
+svm_model <- svm(M ~ V + H + S, data=train1, kernel="radial")
+
+# Print the summary of the model
+print(summary(svm_model))
+
+# Predict on the test set
+svm_pred <- predict(svm_model, test1)
+
+# Model Diagnostics
+confusion_matrix_3 <- table(test1$M, svm_pred)
+
+accuracy <- mean(diag(confusion_matrix_3))
+precision <- precision(confusion_matrix_3)
+recall <- recall(confusion_matrix_3)
+
+print(accuracy)
+print(precision)
+print(recall)
+print(confusion_matrix_3)
+```
+
+```{r}
+plot_ly(
+    x = c(1,2,3,4,5), y = c(1,2,3,4,5),
+    z = confusion_matrix_3, type = "heatmap", colorscale = 'Greys'
+)
+```

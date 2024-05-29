@@ -1,0 +1,173 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Project 2 (EAS 509: Fall'23)
+
+### [**Project Title**]{.underline}: Time Series Analysis & Forecasting of Oil Sales
+
+### [Team Members]{.underline}:
+
+1.  Sujay Shrivastava (50496221) (sujayshr)
+2.  Utkarsh Mathur (50495131) (umathur)
+3.  Venkata Lakshmi Krishna Tejaswi Gudimetla (50496378) (vgudimet)
+
+------------------------------------------------------------------------
+
+## Importing Libraries and Data
+
+```{r}
+# Visualization and Analysis
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggdendro)
+library(readxl)
+library(plotly)
+suppressWarnings({
+  library(readxl)
+})
+
+# Modeling and Inference
+library(TSA)
+library(forecast)
+library(astsa)
+```
+
+```{r}
+# Importind Data.
+# NOTE: Please store the oil.csv file in the directory of this file.
+df = read.csv('oil.csv')
+summary(df)
+```
+
+From the above summary we can observe that there are 1218 datapoints in out dataset and 43 missing values. We will address the missing values later on.
+
+------------------------------------------------------------------------
+
+## Plotting Original Data
+
+```{r}
+plot1 <- df |>
+  plot_ly(type="scatter", mode="lines") |>
+  add_trace(x = ~date, y = ~dcoilwtico, name="Daily Sale") |>
+  layout(showlegend=FALSE, plot_bgcolor = "white")
+options(warn=-1)
+
+plot1
+```
+
+------------------------------------------------------------------------
+
+## Imputing Missing Value
+
+Based on the analysis of the plot we have decided to impute missing value with the next value observed in the time series.
+
+```{r}
+df_new <- df %>% fill(dcoilwtico, .direction="up")
+summary(df_new)
+```
+
+We now plot the imputed dataset.
+
+```{r}
+plot2 <- df_new |>
+  plot_ly(type="scatter", mode="lines") |>
+  add_trace(x = ~date, y = ~dcoilwtico, name="Daily Sale") |>
+  layout(showlegend=FALSE, plot_bgcolor = "white")
+options(warn=-1)
+
+plot2
+```
+
+Upon plotting the imputed dataset we can observe that there is no trend or seasonality observed over time. This is a very good instance to test Exponential Smoothing methods.
+
+![](images/Screenshot%202023-12-06%20222515.png)
+
+As it can be seen in the above code piece the data has no seasonality as the time series in not decomposible.
+
+------------------------------------------------------------------------
+
+## ETS and Holt-Winters Models
+
+Forecasts produced using exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get older. In other words, the more recent the observation the higher the associated weight.
+
+### Simple Exponential Smoothing
+
+The simplest of exponentially smoothing methods is Simple Exponential Smoothing (SES). This method is suitable for forecasting data with no clear trend or seasonal pattern. For simple exponential smoothing, the only component included is the level as observed in the below forecasting and smoothing equation. The smoothing equation only uses alpha to include the trend component of Time Series.
+
+![](images/Screenshot%202023-12-06%20220120.png)
+
+### Holt-Winters Methods
+
+Holt (1957) and Winters (1960) extended Holt's method to capture seasonality. The Holt-Winters seasonal method comprises the forecast equation and three smoothing equations --- one for the level $l_t$ one for the trend $b_t$, and one for the seasonal component $s_t$ ,with corresponding smoothing parameters $\alpha$, $\beta^*$, and $\gamma$ respectively.
+
+#### Additive Method:
+
+![](images/Screenshot%202023-12-06%20221048.png)
+
+#### Multiplicative Method:
+
+![](images/Screenshot%202023-12-06%20221107.png)
+
+------------------------------------------------------------------------
+
+## Model Training
+
+As the data doesn't have seasonality in it (evident from the decomposition of data) we can safely say that Holt-Winters method is of lesser use here. So we are going to compare 2 models:
+
+1.  ARIMA (trained without specifying p, d, and q)
+2.  Exponential Smoothing
+
+### ARIMA Model
+
+```{r}
+modelARIMA <- auto.arima(df_new['dcoilwtico'])
+summary(modelARIMA)
+```
+
+As observed, the best fit ARIMA model is ARIMA(p=0, d=1, q=0) with AICc3906.73 and RMSE 1.203095.
+
+```{r}
+fcARIMA <- forecast(modelARIMA, h=100)
+autoplot(fcARIMA)
+```
+
+### Exponential Smoothing model
+
+```{r}
+dfETS <- as.ts(df_new['dcoilwtico'])
+modelETS <- ets(dfETS) 
+summary(modelETS)
+```
+
+The best fitted Exponential Smoothing model has alpha 0.954, and its has AICc of 9107.735 and RMSE score is 1.20184 which is better than the performance of best fitted ARIMA model.
+
+```{r}
+fcETS <- forecast(modelETS, h=100)
+autoplot(fcETS)
+```
+
+### Diagnosis and Forecasting Analysis
+
+Upon training the dataset on ARIMA and ETS models we observe that they yield similar RMSE scores. This metric is further supported in the behavior of the 100 days forecast plots.
+
+However, the RMSE score of the Exponential Smoothing (1.20184) is better than ARIMA model (1.203095) so, for our data the the Exponential Smoothing model (with alpha=0.954, beta=0, and gamma=0) is a better model than ARIMA (p=0, d=1, q=0).
+
+------------------------------------------------------------------------
+
+## References
+
+1.  <https://www.rdocumentation.org/>
+2.  Hyndman, R.J., & Athanasopoulos, G. (2021) *Forecasting: principles and practice*, 3rd edition, OTexts: Melbourne, Australia. OTexts.com/fpp3. Accessed on 4 December 2023. (<https://otexts.com/fpp3/>) \*\*
+3.  <https://robjhyndman.com/expsmooth/> (Accessed on 4 December 2023)
+4.  <https://medium.com/analytics-vidhya/a-thorough-introduction-to-holt-winters-forecasting-c21810b8c0e6> (Accessed on 4 December 2023)
+5.  <https://www.machinelearningplus.com/time-series/arima-model-time-series-forecasting-python/> (Accessed on 5 December 2023)
+6.  <https://www.r-bloggers.com/2023/01/imputation-in-r-top-3-ways-for-imputing-missing-data/> (Accessed on 5 December 2023)
+7.  <https://tidyr.tidyverse.org/reference/fill.html> (Accessed on 6 December 2023)
+
+\*\* We used the exact text from this book to maintain the accuracy of theoretical information provided.
