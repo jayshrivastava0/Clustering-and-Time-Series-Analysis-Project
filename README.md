@@ -1,4 +1,4 @@
-# Clustering and Time Series Analysis Project
+# [Clustering and Time Series Analysis Project](https://medium.com/@sujay1829/clustering-and-time-series-analysis-with-r-a-deep-dive-into-two-case-studies-88b29799b985)
 
 This project is divided into two main analyses:
 1. **Clustering Analysis**: A project analyzing land mines data using various clustering techniques.
